@@ -35,6 +35,17 @@
       "scope": 2,
       "type": 3,
       "action": 0
+    },
+    {
+      "key": "/Applications/Claude.app/Contents/MacOS/Claude",
+      "uuid": "7BEC178C-3392-46BF-8359-0599599065C6",
+      "path": "/Applications/Claude.app/Contents/MacOS/Claude",
+      "name": "Claude Desktop process and children",
+      "endpointAddr": "127.0.0.1",
+      "endpointPort": "17943",
+      "scope": 2,
+      "type": 3,
+      "action": 1
     }
   ]
 }

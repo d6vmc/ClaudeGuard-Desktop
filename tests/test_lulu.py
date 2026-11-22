@@ -75,6 +75,31 @@ class LuLuPolicyTests(unittest.TestCase):
             prefs.write_bytes(plistlib.dumps({"disabled": False, "allowLocalHost": True}))
             self.assertEqual(prepare_import(template, root_dir), {"status": "settings"})
 
+    def test_legacy_policy_still_protects_chat_and_import_adds_only_the_code_rule(self):
+        template = json.loads(RULE_FILE.read_text())
+        executable = "/Applications/Claude.app/Contents/MacOS/Claude"
+        deny, allow = template[executable]
+        self.assertEqual((allow["endpointAddr"], allow["endpointPort"], allow["scope"], allow["action"]),
+                         ("127.0.0.1", "17943", 2, 1))
+        self.assertEqual((deny["endpointAddr"], deny["endpointPort"], deny["scope"], deny["action"]),
+                         ("*", "*", 2, 0))
+        with tempfile.TemporaryDirectory() as folder:
+            root_dir = Path(folder)
+            (root_dir / "preferences.plist").write_bytes(plistlib.dumps({"disabled": False, "allowLocalHost": False}))
+            rules = root_dir / "rules.plist"
+            rules.write_bytes(archive({**template, executable: [deny]}))
+            self.assertTrue(has_desktop_policy(root_dir))
+            prepared = prepare_import(template, root_dir)
+            self.assertEqual(prepared["status"], "import")
+            self.assertEqual(prepared["rules"], template)
+            rules.write_bytes(archive(prepared["rules"]))
+            self.assertEqual(prepare_import(template, root_dir), {"status": "ready"})
+
+            widened = dict(allow, endpointHost="example.org")
+            rules.write_bytes(archive({**template, executable: [deny, widened]}))
+            self.assertFalse(has_desktop_policy(root_dir))
+            self.assertEqual(prepare_import(template, root_dir), {"status": "conflict"})
+
 
 def archive(groups):
     objects = ["$null"]

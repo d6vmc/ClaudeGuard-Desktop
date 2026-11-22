@@ -13,11 +13,12 @@ INSTALL_DIRECTORY = Path("/Library/Objective-See/LuLu")
 BUNDLE = "/Applications/Claude.app"
 FOLDER = BUNDLE + "/*"
 EXECUTABLE = BUNDLE + "/Contents/MacOS/Claude"
-EXPECTED = {
+REQUIRED_RULES = {
     (FOLDER, "*", "*", 0, 1),
     (FOLDER, "127.0.0.1", str(PORT), 1, 1),
     (EXECUTABLE, "*", "*", 0, 2),
 }
+EXPECTED = REQUIRED_RULES | {(EXECUTABLE, "127.0.0.1", str(PORT), 1, 2)}
 EXTENSION = "com.objective-see.lulu.extension"
 SYSTEM_REGISTRATION = re.compile(
     rf"(?m)^\s*\*\s+\*\s+VBG97UB4TA\s+{re.escape(EXTENSION)}\s+[^\n]*\[activated enabled\]\s*$"
@@ -101,9 +102,14 @@ def _statement(rule):
     return tuple(rule[key] for key in ("path", "endpointAddr", "endpointPort", "action", "scope"))
 
 
+def _exact_address(rule):
+    return (not rule.get("isEndpointAddrRegex")
+            and rule.get("endpointHost") in (None, "$null", rule["endpointAddr"]))
+
+
 def _protected_statement(rule):
     if (rule.get("type") == 3 and rule.get("isDisabled") in (None, 0, "$null")
-            and not rule.get("isEndpointAddrRegex") and rule.get("expiration") in (None, "$null")
+            and _exact_address(rule) and rule.get("expiration") in (None, "$null")
             and rule.get("pid") in (None, "$null") and _statement(rule) in EXPECTED):
         return _statement(rule)
     return None
@@ -115,7 +121,7 @@ def _conflicting_allow(rule):
     path = rule["path"]
     return (path in ("*", BUNDLE) or path.startswith(BUNDLE + "/")
             or (path.endswith("/*") and BUNDLE.startswith(path[:-1]))) and (
-                _statement(rule) not in EXPECTED or rule.get("isEndpointAddrRegex"))
+                _statement(rule) not in EXPECTED or not _exact_address(rule))
 
 
 def _snapshot(install_dir):
@@ -184,7 +190,9 @@ def has_desktop_policy(install_dir=INSTALL_DIRECTORY):
         if not _compatible(plistlib.loads(preferences)):
             return False
         rules = list(rules_in_archive((directory / "rules.plist").read_bytes()))
-        return EXPECTED.issubset({_protected_statement(rule) for rule in rules}) and not any(
+        # Older imports still block direct traffic. Adding the tree exception
+        # is only necessary to let Desktop's bundled Code sessions use the proxy.
+        return REQUIRED_RULES.issubset({_protected_statement(rule) for rule in rules}) and not any(
             _conflicting_allow(rule) for rule in rules)
     except (OSError, ValueError, TypeError, KeyError, IndexError, AttributeError, plistlib.InvalidFileException):
         return False
