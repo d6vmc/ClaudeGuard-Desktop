@@ -136,29 +136,37 @@ private enum SwitchTrace {
     }
 }
 
-// Shared native input window for IPs, model IDs and proxy profiles.
-final class SettingsInputWindow: NSWindow, NSWindowDelegate {
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command),
-           let editor = firstResponder as? NSTextView {
-            // Physical-key fallback keeps editing shortcuts working with Russian layouts.
-            let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
-            let shortcut = ["c", "v", "x", "a", "z"].contains(key) ? key
-                : ([UInt16(8): "c", 9: "v", 7: "x", 0: "a", 6: "z"][event.keyCode] ?? key)
-            switch shortcut {
-            case "c": editor.copy(nil)
-            case "v": editor.paste(nil)
-            case "x": editor.cut(nil)
-            case "a": editor.selectAll(nil)
-            case "z":
-                if event.modifierFlags.contains(.shift) { editor.undoManager?.redo() }
-                else { editor.undoManager?.undo() }
-            default: return super.performKeyEquivalent(with: event)
-            }
-            return true
+private func runTextInputModal(in window: NSWindow,
+                               _ present: () -> NSApplication.ModalResponse) -> NSApplication.ModalResponse {
+    // The menu-bar app has no Edit menu, and modal dispatch can skip the window's key equivalents.
+    let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        guard event.window === window, NSApp.modalWindow === window,
+              let editor = window.firstResponder as? NSTextView, editor.isFieldEditor else { return event }
+        let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        let key = event.charactersIgnoringModifiers?.lowercased()
+        switch (modifiers, key) {
+        case (.command, "a"), (.command, "ф"): editor.selectAll(nil)
+        case (.command, "c"), (.command, "с"): editor.copy(nil)
+        case (.command, "v"), (.command, "м"): editor.paste(nil)
+        case (.command, "x"), (.command, "ч"): editor.cut(nil)
+        case (.command, "z"), (.command, "я"): editor.undoManager?.undo()
+        case ([.command, .shift], "z"), ([.command, .shift], "я"): editor.undoManager?.redo()
+        default: return event
         }
-        return super.performKeyEquivalent(with: event)
+        return nil
     }
+    defer { if let monitor { NSEvent.removeMonitor(monitor) } }
+    return present()
+}
+
+private final class SettingsInputField: NSTextField {
+    @objc func pasteReplacingValue() {
+        selectText(nil)
+        (currentEditor() as? NSTextView)?.paste(nil)
+    }
+}
+
+final class SettingsInputWindow: NSWindow, NSWindowDelegate {
     @objc func acceptInput() { NSApp.stopModal(withCode: .OK) }
     @objc func cancelInput() { NSApp.abortModal() }
     func windowShouldClose(_ sender: NSWindow) -> Bool { NSApp.abortModal(); return true }
@@ -1445,10 +1453,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(field)
         field.selectText(nil)
-        let response = NSApp.runModal(for: window)
-        let entered = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        window.orderOut(nil); window.close()
-        return response == .OK ? entered : nil
+        defer { window.orderOut(nil); window.close() }
+        let response = runTextInputModal(in: window) { NSApp.runModal(for: window) }
+        guard response == .OK else { return nil }
+        window.makeFirstResponder(nil)
+        return field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func currentProxyInput() -> String {
@@ -1514,7 +1523,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func promptProxyFields(_ title: String, _ message: String,
-                                   _ entries: [(String, String, String)]) -> [String: String]? {
+                                   _ entries: [(String, String, String)],
+                                   pasteFirstField: Bool = false) -> [String: String]? {
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
@@ -1525,16 +1535,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let y = CGFloat((entries.count - index - 1) * 32)
             let label = NSTextField(labelWithString: entry.1)
             label.frame = NSRect(x: 0, y: y + 4, width: 145, height: 20)
-            let field = NSTextField(frame: NSRect(x: 150, y: y, width: 290, height: 24))
+            let offersPaste = index == 0 && pasteFirstField
+            let field = SettingsInputField(frame: NSRect(x: 150, y: y, width: offersPaste ? 200 : 290, height: 24))
             field.stringValue = entry.2
             view.addSubview(label)
             view.addSubview(field)
+            if offersPaste {
+                let paste = NSButton(title: menuText("Paste", "Вставить"), target: field,
+                                     action: #selector(SettingsInputField.pasteReplacingValue))
+                paste.bezelStyle = .rounded
+                paste.frame = NSRect(x: 358, y: y - 1, width: 82, height: 26)
+                view.addSubview(paste)
+            }
             return field
         }
         alert.accessoryView = view
-        if let first = fields.first { alert.window.initialFirstResponder = first }
+        alert.layout()
+        let window = alert.window
+        window.initialFirstResponder = fields.first
         NSApp.activate(ignoringOtherApps: true)
-        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        let response = runTextInputModal(in: window) { alert.runModal() }
+        guard response == .alertFirstButtonReturn else { return nil }
+        window.makeFirstResponder(nil)
         return Dictionary(uniqueKeysWithValues: zip(entries.map { $0.0 }, fields.map { $0.stringValue }))
     }
 
@@ -1556,7 +1578,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let values = promptProxyFields(
             "VLESS/REALITY Proxy", "To keep this profile independent of Happ, enter a Wi-Fi or Ethernet interface and the server's literal IPv4.",
             [("url", "VLESS/REALITY URL", ""), ("interface", "Interface (optional)", ""),
-             ("address", "Server IPv4 (optional)", ""), ("exit_ip", "Expected exit IPv4", expectedExitIP)]
+             ("address", "Server IPv4 (optional)", ""), ("exit_ip", "Expected exit IPv4", expectedExitIP)],
+            pasteFirstField: true
         ), let data = try? JSONSerialization.data(withJSONObject: values) else { return }
         applyManagedSettings(["managed_xray_save"], input: data)
     }
