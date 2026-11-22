@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key><string>com.claudeguard.app.desktop-filter</string>
+    <key>CFBundleExecutable</key><string>com.claudeguard.app.desktop-filter</string>
+    <key>CFBundleName</key><string>ClaudeGuard Desktop Network Filter</string>
+    <key>CFBundlePackageType</key><string>SYSX</string>
+    <key>LSMinimumSystemVersion</key><string>15.0</string>
+    <key>NSSystemExtensionUsageDescription</key>
+    <string>Keep Claude Desktop network connections on ClaudeGuard’s verified proxy.</string>
+    <key>NetworkExtension</key>
+    <dict>
+        <key>NEProviderClasses</key>
+        <dict><key>com.apple.networkextension.filter-data</key><string>ClaudeGuardDesktopFilter.FilterDataProvider</string></dict>
+    </dict>
+</dict>
+</plist>

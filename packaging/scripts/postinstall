@@ -1,0 +1,5 @@
+#!/bin/bash
+set -euo pipefail
+python="/Library/Application Support/ClaudeGuard/python3"
+[ -x "$python" ] || python=/usr/bin/python3
+exec "$python" -I "$(dirname "$0")/configure.py" postinstall

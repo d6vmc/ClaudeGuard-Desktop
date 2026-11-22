@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+base="${0%/*}"
+exec "$base/python/$(/usr/bin/uname -m)/bin/python3" "$@"

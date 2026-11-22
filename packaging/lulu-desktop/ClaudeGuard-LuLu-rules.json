@@ -1,0 +1,40 @@
+{
+  "/Applications/Claude.app/*": [
+    {
+      "key": "/Applications/Claude.app/*",
+      "uuid": "FC5F9E9A-92C6-4ED9-ACE9-BDF8B19F8CD9",
+      "path": "/Applications/Claude.app/*",
+      "name": "Claude Desktop bundle",
+      "endpointAddr": "*",
+      "endpointPort": "*",
+      "scope": 1,
+      "type": 3,
+      "action": 0
+    },
+    {
+      "key": "/Applications/Claude.app/*",
+      "uuid": "EEBAE15C-B6DC-487E-AF9F-EEF94077647B",
+      "path": "/Applications/Claude.app/*",
+      "name": "Claude Desktop bundle",
+      "endpointAddr": "127.0.0.1",
+      "endpointHost": "127.0.0.1",
+      "endpointPort": "17943",
+      "scope": 1,
+      "type": 3,
+      "action": 1
+    }
+  ],
+  "/Applications/Claude.app/Contents/MacOS/Claude": [
+    {
+      "key": "/Applications/Claude.app/Contents/MacOS/Claude",
+      "uuid": "9601F84B-FBBD-42ED-9066-CAD7FFFFB0EA",
+      "path": "/Applications/Claude.app/Contents/MacOS/Claude",
+      "name": "Claude Desktop process and children",
+      "endpointAddr": "*",
+      "endpointPort": "*",
+      "scope": 2,
+      "type": 3,
+      "action": 0
+    }
+  ]
+}

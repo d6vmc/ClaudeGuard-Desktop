@@ -1,0 +1,21 @@
+#!/bin/bash
+set -euo pipefail
+if [ "${3:-/}" != / ]; then
+    echo 'ClaudeGuard must be installed on the running startup disk.' >&2
+    exit 1
+fi
+scripts="$(dirname "$0")"
+installed="/Library/Application Support/ClaudeGuard"
+if [ -x "$installed/python3" ]; then
+    exec "$installed/python3" -I "$scripts/configure.py" preinstall
+fi
+if [ -f "$scripts/embedded-runtime" ] && [ ! -e "$installed/hosts-helper" ] && [ ! -e /Applications/ClaudeGuard.app ]; then
+    # On a fresh install there is nothing to quiesce. The bundled runtime
+    # performs the user preflight in postinstall, before services start.
+    exit 0
+fi
+if ! /usr/bin/xcode-select -p >/dev/null 2>&1 || ! /usr/bin/python3 -I -c 'import sys; assert sys.version_info >= (3, 9)' >/dev/null 2>&1; then
+    echo 'Install Xcode Command Line Tools first: xcode-select --install. Then reopen this installer.' >&2
+    exit 1
+fi
+exec /usr/bin/python3 -I "$scripts/configure.py" preinstall

@@ -1,0 +1,47 @@
+name: ClaudeGuard Desktop release
+
+on:
+  push:
+    tags:
+      - 'v*-desktop'
+      - 'v*-desktop.*'
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          version="${version%%-desktop*}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          python3 -B -m unittest discover -s tests
+          python3 -B tests/check_menu_mode.py
+          COPYFILE_DISABLE=1 CLAUDEGUARD_LULU_DESKTOP=1 bash build.sh "$version"
+          stage="$(mktemp -d)"
+          /usr/sbin/pkgutil --expand-full ClaudeGuard.pkg "$stage/expanded"
+          library="$stage/expanded/component.pkg/Payload/Library/Application Support/ClaudeGuard"
+          app="$stage/expanded/component.pkg/Payload/Applications/ClaudeGuard.app"
+          /usr/bin/codesign --verify --deep --strict "$app"
+          test -x "$app/Contents/Helpers/ClaudeGuard Uninstaller.app/Contents/MacOS/applet"
+          test -f "$library/remove_desktop.py" && test -f "$library/GPL-3.0.txt"
+          "$library/python3" -I -c 'import ssl, plistlib'
+          "$library/xray" version
+          mv ClaudeGuard.pkg ClaudeGuard-Desktop.pkg
+          shasum -a 256 ClaudeGuard-Desktop.pkg > ClaudeGuard-Desktop.pkg.sha256
+      - name: Publish the installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" ClaudeGuard-Desktop.pkg ClaudeGuard-Desktop.pkg.sha256 \
+            --verify-tag --prerelease --title "ClaudeGuard Desktop $GITHUB_REF_NAME" \
+            --notes "Установщик для macOS 14+ на Apple Silicon и Intel. В меню доступны проверка обновлений и удаление ClaudeGuard. [Инструкция на русском](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/README.desktop.ru.md)."
